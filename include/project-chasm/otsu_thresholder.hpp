@@ -34,9 +34,11 @@ class OtsuThresholder
         ~OtsuThresholder() {}
 
         // Main functions
-        void calculateOptimalThreshold();
+        void applyThresholding();
+        int calculateOptimalThreshold(std::vector<double>& hist, double& mean);
         std::vector<double> calculateHistogram(cv::Mat& image);
         double getHistogramMean(std::vector<double>& hist);
-        double q1(int t, std::vector<double>& hist);
-        double mean1(int t, std::vector<double>& hist);
+        double calculateWeight1(int t, int& firstNZIndex, std::vector<double>& hist);
+        double calculateMean1(int t, int& firstNZIndex, std::vector<double>& hist);
+        int getFirstNonzeroIndex(std::vector<double>& hist);
 };

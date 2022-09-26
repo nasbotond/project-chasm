@@ -28,7 +28,7 @@ int main(int argc, char* argv[])
 
     try 
     {
-        otsu.calculateOptimalThreshold();
+        otsu.applyThresholding();
     } 
     catch(const std::exception &e) 
     {
