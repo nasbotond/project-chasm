@@ -18,9 +18,10 @@
 #include <vector>
 #include <cmath>
 #include <stdint.h>
+#include <functional> 
 namespace fs = std::filesystem;
 
-class EdgeDetector
+class OtsuThresholder
 {
     private:
     
@@ -29,10 +30,13 @@ class EdgeDetector
 
     public:
 
-        EdgeDetector(const std::string &sPath, const std::string &outputFileName) : sPath(sPath), outputFileName(outputFileName) {}
-        ~EdgeDetector() {}
+        OtsuThresholder(const std::string &sPath, const std::string &outputFileName) : sPath(sPath), outputFileName(outputFileName) {}
+        ~OtsuThresholder() {}
 
         // Main functions
-        void getEdges();
-        void prewittEdgeDetectorWithNMS(cv::Mat& image, cv::Mat& outputPrewitt, cv::Mat& outputPrewittNMS);
+        void calculateOptimalThreshold();
+        std::vector<double> calculateHistogram(cv::Mat& image);
+        double getHistogramMean(std::vector<double>& hist);
+        double q1(int t, std::vector<double>& hist);
+        double mean1(int t, std::vector<double>& hist);
 };

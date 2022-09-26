@@ -1,7 +1,9 @@
-#include "edge_detector.hpp"
+#include "otsu_thresholder.hpp"
 
-void EdgeDetector::getEdges()
+void OtsuThresholder::calculateOptimalThreshold()
 {
+    // mean^2 = q1(t)*[1 − q1(t)]*[μ1(t) − μ2(t)]^2
+    
     for (const auto & entry : fs::directory_iterator(this->sPath))
     {
         std::string fileName = entry.path().filename().string();
@@ -22,88 +24,105 @@ void EdgeDetector::getEdges()
             // Read image into Mat
             cv::Mat image = cv::imread(entry.path().string(), cv::IMREAD_GRAYSCALE);
 
-            cv::Mat outputPrewitt;
-            cv::Mat outputPrewittNMS;
+            std::vector<double> hist = calculateHistogram(image);
+            double mean = getHistogramMean(hist);
 
-            prewittEdgeDetectorWithNMS(image, outputPrewitt, outputPrewittNMS);
+            double maxVarSquared = 0.0;
+            int optThresh = 0;
 
-            // Create combined image to view results side-by-side
-            cv::Mat combinedImage(image.rows, 3*image.cols, CV_8U);
-            cv::Mat left(combinedImage, cv::Rect(0, 0, image.cols, image.rows));
-            image.copyTo(left);
-            cv::Mat center(combinedImage, cv::Rect(image.cols, 0, image.cols, image.rows));
-            outputPrewitt.copyTo(center);
-            cv::Mat right(combinedImage, cv::Rect(2*image.cols, 0, image.cols, image.rows));
-            outputPrewittNMS.copyTo(right);
+            for(int t = 0; t < 256; ++t)
+            {
+                double q1v = q1(t, hist);
+                double mean1v = mean1(t, hist);
+                double mean2v = (mean - q1v*mean1v)/(1-q1v);
 
-            // Save results (write to file)
-            cv::imwrite(outputNamePrewitt, outputPrewitt);
-            cv::imwrite(outputNamePrewittNMS, outputPrewittNMS);
-            cv::imwrite(outputNameCombined, combinedImage);
+                double varSquared = q1v*(1.0-q1v)*pow((mean1v-mean2v), 2);
 
-            // Show combined image
-            cv::imshow("(1) Original : (2) Gradient Magnitude : (3) Prewitt Edge Detection with NMS", combinedImage);
-            cv::waitKey(0);
-        }        
+                if(varSquared > maxVarSquared)
+                {
+                    optThresh = t;
+                    maxVarSquared = varSquared;
+                }
+            }
+            std::cout << optThresh << std::endl;
+
+            // cv::Mat outputPrewitt;
+            // cv::Mat outputPrewittNMS;
+
+            // prewittEdgeDetectorWithNMS(image, outputPrewitt, outputPrewittNMS);
+
+            // // Create combined image to view results side-by-side
+            // cv::Mat combinedImage(image.rows, 3*image.cols, CV_8U);
+            // cv::Mat left(combinedImage, cv::Rect(0, 0, image.cols, image.rows));
+            // image.copyTo(left);
+            // cv::Mat center(combinedImage, cv::Rect(image.cols, 0, image.cols, image.rows));
+            // outputPrewitt.copyTo(center);
+            // cv::Mat right(combinedImage, cv::Rect(2*image.cols, 0, image.cols, image.rows));
+            // outputPrewittNMS.copyTo(right);
+
+            // // Save results (write to file)
+            // cv::imwrite(outputNamePrewitt, outputPrewitt);
+            // cv::imwrite(outputNamePrewittNMS, outputPrewittNMS);
+            // cv::imwrite(outputNameCombined, combinedImage);
+
+            // // Show combined image
+            // cv::imshow("(1) Original : (2) Gradient Magnitude : (3) Prewitt Edge Detection with NMS", combinedImage);
+            // cv::waitKey(0);
+        }
     }
 }
 
-void EdgeDetector::prewittEdgeDetectorWithNMS(cv::Mat& image, cv::Mat& outputPrewitt, cv::Mat& outputPrewittNMS)
+
+std::vector<double> OtsuThresholder::calculateHistogram(cv::Mat& image)
 {
-    std::vector<uint8_t> magnitudes(image.rows*image.cols);
-    std::vector<uint8_t> magnitudesAfterNMS(image.rows*image.cols);
-    std::vector<double> gradientDirections(image.rows*image.cols);
+    std::vector<double> hist(256);
+    int numPixels = image.total();
 
-    int kernelSize = 3;
-    int halfKernelSize = kernelSize / 2;
-
-    for(int i = halfKernelSize; i < image.rows - halfKernelSize; ++i) // vertical axis (rows)
+    for(int i = 0; i < image.rows; ++i)
     {
-        for(int j = halfKernelSize; j < image.cols - halfKernelSize; ++j) // horizontal axis (columns)
+        for(int j = 0; j < image.cols; ++j)
         {
-            double magnitudeX = 0;
-            double magnitudeY = 0;
-
-            for(int u = -halfKernelSize; u <= halfKernelSize; ++u)
-            {
-                for(int v = -halfKernelSize; v <= halfKernelSize; ++v)
-                {
-                    magnitudeX += (double)v*image.at<uchar>(i+u,j+v);
-                    magnitudeY += (double)u*image.at<uchar>(i+u,j+v);
-                }
-            }
-            magnitudes.at(i*image.cols + j) = (int)sqrt(pow(magnitudeX, 2) + pow(magnitudeY, 2));
-            gradientDirections.at(i*image.cols+j) = atan(magnitudeX/magnitudeY);
+            hist.at(image.at<uchar>(i,j)) = hist.at(image.at<uchar>(i,j)) + 1;
         }
     }
 
-    cv::Mat(image.rows, image.cols, CV_8U, magnitudes.data()).copyTo(outputPrewitt); // deep copy
+    std::transform(hist.begin(), hist.end(), hist.begin(), [&numPixels](auto &c){ return c/numPixels; });
 
-    // Algoritmus: Non-maxima suppression
-    // 1 From each position (x,y), step in the two directions perpendicular to edge orientation Θ(x,y)
-    // 2 Denote inital pixel (x,y) by C, the two neighbouring pixels in perpendicular directions by A and B
-    // 3 If M(A) > M(C) or M(B) > M(C), discard pixel (x,y) by setting M(x, y) = 0
+    return hist;
+}
 
-    for(int i = halfKernelSize; i < image.rows - halfKernelSize; ++i) // vertical axis (rows)
+double OtsuThresholder::getHistogramMean(std::vector<double>& hist)
+{
+    double mean = 0.0;
+
+    for(int i = 0; i < hist.size(); ++i)
     {
-        for(int j = halfKernelSize; j < image.cols - halfKernelSize; ++j) // horizontal axis (columns)
-        {
-            double perpendicularDirection = gradientDirections.at(i*image.cols+j) + (M_PI/2);
-
-            if(perpendicularDirection < M_PI/6)
-            {
-                magnitudesAfterNMS.at(i*image.cols+j) = (magnitudes.at(i*image.cols+j+1) > magnitudes.at(i*image.cols+j)) || (magnitudes.at(i*image.cols+j-1) > magnitudes.at(i*image.cols+j)) ? 0 : magnitudes.at(i*image.cols+j);
-            }
-            else if(perpendicularDirection > M_PI/6)
-            {
-                magnitudesAfterNMS.at(i*image.cols+j) = (magnitudes.at((i+1)*image.cols+j) > magnitudes.at(i*image.cols+j)) || (magnitudes.at((i-1)*image.cols+j) > magnitudes.at(i*image.cols+j)) ? 0 : magnitudes.at(i*image.cols+j);
-            }
-            else
-            {
-                magnitudesAfterNMS.at(i*image.cols+j) = (magnitudes.at((i+1)*image.cols+j+1) > magnitudes.at(i*image.cols+j)) || (magnitudes.at((i-1)*image.cols+j-1) > magnitudes.at(i*image.cols+j)) ? 0 : magnitudes.at(i*image.cols+j);
-            }
-        }
+        mean = mean + (i*hist.at(i));
     }
 
-    cv::Mat(image.rows, image.cols, CV_8U, magnitudesAfterNMS.data()).copyTo(outputPrewittNMS); // deep copy
+    return mean;
+}
+
+double OtsuThresholder::q1(int t, std::vector<double>& hist)
+{
+    if (t == 0) // terminating value
+    {
+        return hist.at(0);
+    }
+    else
+    {
+        return q1(t-1, hist) + hist.at(t);
+    }
+}
+
+double OtsuThresholder::mean1(int t, std::vector<double>& hist)
+{
+    if (t == 0) // terminating value
+    {
+        return 0;
+    }
+    else
+    {
+        return (q1(t-1, hist)*mean1(t-1, hist) + t*hist.at(t))/q1(t, hist);
+    }
 }

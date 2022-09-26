@@ -3,7 +3,7 @@
 #include <iostream>
 #include <string>
 
-#include "edge_detector.hpp"
+#include "otsu_thresholder.hpp"
 
 int main(int argc, char* argv[]) 
 {
@@ -24,11 +24,11 @@ int main(int argc, char* argv[])
     }
 
     // Input
-    EdgeDetector detector = EdgeDetector(sPath, outputFileName);    
+    OtsuThresholder otsu = OtsuThresholder(sPath, outputFileName);    
 
     try 
     {
-        detector.getEdges();
+        otsu.calculateOptimalThreshold();
     } 
     catch(const std::exception &e) 
     {
