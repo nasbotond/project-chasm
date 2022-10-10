@@ -13,9 +13,11 @@ This code takes a path to a directory and performs Otsu Thresholding on each com
 
 ## Example Results
 
-![Motor](test_outputs/output_motor_combined.jpg)
+![Phobos](test_outputs/output_phobos_combined.jpg)
+![Aluminium](test_outputs/output_aluminium_combined.jpg)
 ![Julia](test_outputs/output_julia_combined.jpg)
-![CirleGrey](test_outputs/output_circlegrey_combined.jpg)
+![Finger](test_outputs/output_finger_combined.jpg)
+
 
 ## How to build
 ### Linux or MacOS
